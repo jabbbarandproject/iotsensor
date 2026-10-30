@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Sensor Dashboard — ThingsBoard CE Custom Widget</title>
+
+<style>
+  /* ==========================================================
+     RESET & BASE
+     ========================================================== */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    background: #f0f2f5;
+    color: #262626;
+    padding: 24px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #262626;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: #8c8c8c;
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #595959;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 24px 0 12px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e8e8e8;
+  }
+
+  /* ==========================================================
+     SENSOR GRID (4 CARDS)
+     ========================================================== */
+  .sensor-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    width: 100%;
+  }
+
+  /* Tablet: 2 columns */
+  @media (max-width: 959px) and (min-width: 600px) {
+    .sensor-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  /* Mobile: 1 column */
+  @media (max-width: 599px) {
+    .sensor-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    body { padding: 12px; }
+  }
+
+  /* ==========================================================
+     SENSOR CARD
+     ========================================================== */
+  .sensor-card {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-left: 5px solid #1890ff;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.3s ease;
+    min-height: 110px;
+  }
+
+  .sensor-card.normal { border-left-color: #52c41a; }
+
+  .sensor-card.alarm {
+    border-left-color: #f5222d;
+    background: #fff1f0;
+  }
+
+  .sensor-card.offline {
+    border-left-color: #d9d9d9;
+    background: #fafafa;
+    opacity: 0.75;
+  }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8c8c8c;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot.normal { background: #52c41a; box-shadow: 0 0 5px #52c41a; }
+  .dot.alarm  { background: #f5222d; box-shadow: 0 0 5px #f5222d; animation: blink 1s infinite; }
+  .dot.offline{ background: #d9d9d9; }
+
+  @keyframes blink {
+    0%   { opacity: 1; }
+    50%  { opacity: 0.3; }
+    100% { opacity: 1; }
+  }
+
+  .card-main {
+    display: flex;
+    align-items: baseline;
+  }
+
+  .value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #262626;
+    line-height: 1.2;
+  }
+
+  .sensor-card.alarm .value   { color: #f5222d; }
+  .sensor-card.offline .value { color: #bfbfbf; }
+
+  .unit {
+    font-size: 13px;
+    color: #8c8c8c;
+    margin-left: 4px;
+  }
+
+  .conn-text {
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  .card-bottom {
+    font-size: 11px;
+    color: #bfbfbf;
+    margin-top: 6px;
+  }
+
+  /* ==========================================================
+     TREND CHART (Simple SVG-based)
+     ========================================================== */
+  .chart-container {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    width: 100%;
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chart-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #262626;
+  }
+
+  .legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #595959;
+  }
+
+  .legend-color {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+  }
+
+  .chart-svg-wrapper {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  svg.chart {
+    width: 100%;
+    height: 260px;
+    min-width: 320px;
+    display: block;
+  }
+
+  .chart-axis-line { stroke: #e8e8e8; stroke-width: 1; }
+  .chart-grid-line { stroke: #f0f0f0; stroke-width: 1; stroke-dasharray: 3 3; }
+  .chart-axis-text { fill: #8c8c8c; font-size: 10px; font-family: inherit; }
+
+  /* ==========================================================
+     FOOTER NOTE
+     ========================================================== */
+  .note {
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: #e6f7ff;
+    border-left: 4px solid #1890ff;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #595959;
+    line-height: 1.6;
+  }
+</style>
+</head>
+
+<body>
+
+  <h1>IoT Sensor Monitoring Dashboard</h1>
+  <p class="subtitle">Live telemetry simulation — Temperature, Humidity, CO₂ & Device Status</p>
+
+  <!-- ============================
+       STATUS CARDS
+       ============================ -->
+  <div class="section-title">Live Status</div>
+
+  <div class="sensor-grid" id="sensorGrid">
+
+    <!-- Temperature -->
+    <div class="sensor-card offline" id="cardTemp">
+      <div class="card-top">
+        <span class="card-title">Temperature</span>
+        <span class="dot offline" id="dotTemp"></span>
+      </div>
+      <div class="card-main">
+        <span class="value" id="valTemp">--</span>
+        <span class="unit">°C</span>
+      </div>
+      <div class="card-bottom">Alert if ≥ <span id="thrTemp">30</span>°C</div>
+    </div>
+
+    <!-- Humidity -->
+    <div class="sensor-card offline" id="cardHum">
+      <div class="card-top">
+        <span class="card-title">Humidity</span>
+        <span class="dot offline" id="dotHum"></span>
+      </div>
+      <div class="card-main">
+        <span class="value" id="valHum">--</span>
+        <span class="unit">%</span>
+      </div>
+      <div class="card-bottom">Alert if ≥ <span id="thrHum">70</span>%</div>
+    </div>
+
+    <!-- CO2 -->
+    <div class="sensor-card offline" id="cardCo2">
+      <div class="card-top">
+        <span class="card-title">CO₂</span>
+        <span class="dot offline" id="dotCo2"></span>
+      </div>
+      <div class="card-main">
+        <span class="value" id="valCo2">--</span>
+        <span class="unit">ppm</span>
+      </div>
+      <div class="card-bottom">Alert if ≥ <span id="thrCo2">1000</span> ppm</div>
+    </div>
+
+    <!-- Device Status -->
+    <div class="sensor-card offline" id="cardConn">
+      <div class="card-top">
+        <span class="card-title">Device Status</span>
+        <span class="dot offline" id="dotConn"></span>
+      </div>
+      <div class="card-main">
+        <span class="value conn-text" id="valConn">--</span>
+      </div>
+      <div class="card-bottom" id="labelConn">Waiting for data</div>
+    </div>
+
+  </div>
+
+  <!-- ============================
+       24-HOUR TREND CHART
+       ============================ -->
+  <div class="section-title">24-Hour Trend</div>
+
+  <div class="chart-container">
+    <div class="chart-header">
+      <span class="chart-title">Last 24 Hours — Sensor Readings</span>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-color" style="background:#1890ff;"></span>Temperature (°C)</span>
+        <span class="legend-item"><span class="legend-color" style="background:#52c41a;"></span>Humidity (%)</span>
+        <span class="legend-item"><span class="legend-color" style="background:#faad14;"></span>CO₂ (ppm/10)</span>
+      </div>
+    </div>
+    <div class="chart-svg-wrapper">
+      <svg class="chart" id="trendChart" viewBox="0 0 800 260" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Note:</strong> Yeh standalone demo file hai jo simulated data use karti hai.
+    ThingsBoard CE mein ise custom widget ke roop mein use karne ke liye HTML / CSS / JavaScript
+    ko alag-alag tabs mein copy karein aur live telemetry keys bind karein.
+  </div>
+
+<script>
+/* ==========================================================
+   CONFIGURATION
+   ========================================================== */
+var CONFIG = {
+  tempThreshold: 30,    // °C
+  humThreshold: 70,     // %
+  co2Threshold: 1000    // ppm
+};
+
+/* ==========================================================
+   SIMULATED TELEMETRY DATA (24 hours, hourly)
+   ========================================================== */
+var telemetryHistory = [];
+var deviceOnline = true;
+
+function generateHistory() {
+  var now = Date.now();
+  var oneHour = 60 * 60 * 1000;
+  var arr = [];
+  for (var i = 23; i >= 0; i--) {
+    var ts = now - i * oneHour;
+    var hour = new Date(ts).getHours();
+    // Temperature: cooler at night, warmer in afternoon
+    var temp = 22 + 6 * Math.sin((hour - 6) / 24 * Math.PI * 2) + (Math.random() * 2 - 1);
+    // Humidity: inverse of temperature + noise
+    var hum  = 60 - 15 * Math.sin((hour - 6) / 24 * Math.PI * 2) + (Math.random() * 6 - 3);
+    // CO2: higher when occupancy (daytime)
+    var co2  = 500 + (hour >= 8 && hour <= 18 ? 600 : 150) + (Math.random() * 200 - 100);
+    arr.push({
+      ts: ts,
+      temperature: Math.round(temp * 10) / 10,
+      humidity: Math.round(hum),
+      co2: Math.round(co2)
+    });
+  }
+  return arr;
+}
+
+telemetryHistory = generateHistory();
+
+/* ==========================================================
+   STATE UPDATE HELPERS
+   ========================================================== */
+function setCardState(cardId, dotId, state) {
+  var card = document.getElementById(cardId);
+  var dot  = document.getElementById(dotId);
+  card.classList.remove('normal', 'alarm', 'offline');
+  dot.classList.remove('normal', 'alarm', 'offline');
+  card.classList.add(state);
+  dot.classList.add(state);
+}
+
+function updateCardsFromLatest(latest) {
+  if (!latest) return;
+
+  // Temperature
+  var tv = parseFloat(latest.temperature);
+  if (!isNaN(tv)) {
+    document.getElementById('valTemp').textContent = tv.toFixed(1);
+    setCardState('cardTemp', 'dotTemp', tv >= CONFIG.tempThreshold ? 'alarm' : 'normal');
+  }
+
+  // Humidity
+  var hv = parseFloat(latest.humidity);
+  if (!isNaN(hv)) {
+    document.getElementById('valHum').textContent = hv.toFixed(0);
+    setCardState('cardHum', 'dotHum', hv >= CONFIG.humThreshold ? 'alarm' : 'normal');
+  }
+
+  // CO2
+  var cv = parseFloat(latest.co2);
+  if (!isNaN(cv)) {
+    document.getElementById('valCo2').textContent = cv.toFixed(0);
+    setCardState('cardCo2', 'dotCo2', cv >= CONFIG.co2Threshold ? 'alarm' : 'normal');
+  }
+
+  // Device Connectivity
+  if (deviceOnline) {
+    document.getElementById('valConn').textContent = 'Online';
+    document.getElementById('labelConn').textContent = 'Device connected';
+    setCardState('cardConn', 'dotConn', 'normal');
+  } else {
+    document.getElementById('valConn').textContent = 'Offline';
+    document.getElementById('labelConn').textContent = 'No connection';
+    setCardState('cardConn', 'dotConn', 'offline');
+  }
+}
+
+/* ==========================================================
+   TREND CHART (SVG, no library)
+   ========================================================== */
+function drawTrendChart() {
+  var svg = document.getElementById('trendChart');
+  var W = 800, H = 260;
+  var padL = 40, padR = 16, padT = 16, padB = 28;
+  var plotW = W - padL - padR;
+  var plotH = H - padT - padB;
+
+  // Determine min/max across all series (normalized)
+  var temps = telemetryHistory.map(function(p){ return p.temperature; });
+  var hums  = telemetryHistory.map(function(p){ return p.humidity; });
+  var co2s  = telemetryHistory.map(function(p){ return p.co2 / 10; }); // scale CO2
+
+  var allVals = temps.concat(hums, co2s);
+  var minV = Math.min.apply(null, allVals);
+  var maxV = Math.max.apply(null, allVals);
+  var range = maxV - minV || 1;
+  // Padding
+  minV = minV - range * 0.1;
+  maxV = maxV + range * 0.1;
+  range = maxV - minV;
+
+  function x(i) { return padL + (i / (telemetryHistory.length - 1)) * plotW; }
+  function y(v) { return padT + (1 - (v - minV) / range) * plotH; }
+
+  var parts = [];
+
+  // Grid lines (5 horizontal)
+  for (var g = 0; g <= 4; g++) {
+    var gy = padT + (g / 4) * plotH;
+    var gv = maxV - (g / 4) * range;
+    parts.push('<line class="chart-grid-line" x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '"/>');
+    parts.push('<text class="chart-axis-text" x="' + (padL - 6) + '" y="' + (gy + 3) + '" text-anchor="end">' + gv.toFixed(0) + '</text>');
+  }
+
+  // X-axis labels (every 6 hours)
+  for (var i = 0; i < telemetryHistory.length; i += 6) {
+    var d = new Date(telemetryHistory[i].ts);
+    var hh = ('0' + d.getHours()).slice(-2) + ':00';
+    parts.push('<text class="chart-axis-text" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + hh + '</text>');
+  }
+
+  // Axis lines
+  parts.push('<line class="chart-axis-line" x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '"/>');
+  parts.push('<line class="chart-axis-line" x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '"/>');
+
+  // Helper to build polyline
+  function polyline(values, color) {
+    var pts = values.map(function(v, idx){ return x(idx) + ',' + y(v); }).join(' ');
+    return '<polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + pts + '"/>';
+  }
+
+  parts.push(polyline(temps, '#1890ff'));
+  parts.push(polyline(hums,  '#52c41a'));
+  parts.push(polyline(co2s,  '#faad14'));
+
+  svg.innerHTML = parts.join('');
+}
+
+/* ==========================================================
+   LIVE SIMULATION LOOP
+   ========================================================== */
+function tick() {
+  var now = Date.now();
+
+  // Simulate new reading
+  var hour = new Date(now).getHours();
+  var temp = 22 + 6 * Math.sin((hour - 6) / 24 * Math.PI * 2) + (Math.random() * 2 - 1);
+  var hum  = 60 - 15 * Math.sin((hour - 6) / 24 * Math.PI * 2) + (Math.random() * 6 - 3);
+  var co2  = 500 + (hour >= 8 && hour <= 18 ? 600 : 150) + (Math.random() * 200 - 100);
+
+  var latest = {
+    ts: now,
+    temperature: Math.round(temp * 10) / 10,
+    humidity: Math.round(hum),
+    co2: Math.round(co2)
+  };
+
+  // Keep history length ~24; replace oldest
+  telemetryHistory.push(latest);
+  if (telemetryHistory.length > 24) {
+    telemetryHistory.shift();
+  }
+
+  // Randomly toggle device online (rarely goes offline)
+  if (Math.random() < 0.02) {
+    deviceOnline = !deviceOnline;
+  }
+
+  updateCardsFromLatest(latest);
+  drawTrendChart();
+}
+
+/* ==========================================================
+   INIT
+   ========================================================== */
+document.getElementById('thrTemp').textContent = CONFIG.tempThreshold;
+document.getElementById('thrHum').textContent  = CONFIG.humThreshold;
+document.getElementById('thrCo2').textContent  = CONFIG.co2Threshold;
+
+// Initial render
+updateCardsFromLatest(telemetryHistory[telemetryHistory.length - 1]);
+drawTrendChart();
+
+// Update every 3 seconds
+setInterval(tick, 3000);
+</script>
+
+</body>
+</html>
